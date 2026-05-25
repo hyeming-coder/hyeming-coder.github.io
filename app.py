@@ -53,7 +53,7 @@ st.markdown(
     font-size: 1.85rem;
     margin: 0;
     font-weight: 800;
-}    }
+}}
     .title-box p {{
     font-size: 1.05rem;
     margin: 8px 0 0 0;
@@ -95,7 +95,7 @@ st.markdown(
     color: #374151;
     font-weight: 800;
     margin-bottom: 12px;
-}{
+}}
     button[data-baseweb="tab"] p {{
     font-size: 1.05rem;
     font-weight: 700;
