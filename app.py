@@ -25,7 +25,7 @@ COLOR_ACCENT = "#DC2626"       # 강조 레드
 COLOR_VEHICLE = "#7F1D1D"      # 차량 경로
 COLOR_DRONE = "#B45309"        # 드론 경로
 COLOR_CURRENT = "#F97316"      # 현재 위치
-COLOR_HOSPITAL = "rgba(100,116,139,0.35)"
+COLOR_HOSPITAL = "rgba(127,29,29,0.65)"
 COLOR_BG = "#F8FAFC"
 
 st.markdown(
