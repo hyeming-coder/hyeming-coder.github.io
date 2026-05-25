@@ -1054,37 +1054,37 @@ with tab_map:
         #     plot_bgcolor="rgba(0,0,0,0)"
         # )
 
-        st.plotly_chart(fig_cong, width="stretch")
+        # st.plotly_chart(fig_cong, width="stretch")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        # st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="panel-card"><div class="panel-title">현재 투어 방문 순서</div>', unsafe_allow_html=True)
+        # st.markdown('<div class="panel-card"><div class="panel-title">현재 투어 방문 순서</div>', unsafe_allow_html=True)
 
-        if active_tours:
-            rows = []
+        # if active_tours:
+        #     rows = []
 
-            for mode, vehicle_no, tour_no, group in active_tours:
-                for _, row in group.sort_values("visit_order").iterrows():
-                    rows.append({
-                        "수단": "차량" if mode == "vehicle" else "드론",
-                        "번호": vehicle_no,
-                        "투어": tour_no,
-                        "순서": row["visit_order"],
-                        "병원": get_hosp_display_name(row["hospital"]),
-                        "도착": f"{row['arrival_min']:.1f}",
-                        "납기": f"{row['due_min']:.1f}" if "due_min" in row and pd.notna(row["due_min"]) else "-",
-                        "지연": f"{row['tardiness_min']:.1f}" if "tardiness_min" in row and pd.notna(row["tardiness_min"]) else "0.0"
-                    })
+        #     for mode, vehicle_no, tour_no, group in active_tours:
+        #         for _, row in group.sort_values("visit_order").iterrows():
+        #             rows.append({
+        #                 "수단": "차량" if mode == "vehicle" else "드론",
+        #                 "번호": vehicle_no,
+        #                 "투어": tour_no,
+        #                 "순서": row["visit_order"],
+        #                 "병원": get_hosp_display_name(row["hospital"]),
+        #                 "도착": f"{row['arrival_min']:.1f}",
+        #                 "납기": f"{row['due_min']:.1f}" if "due_min" in row and pd.notna(row["due_min"]) else "-",
+        #                 "지연": f"{row['tardiness_min']:.1f}" if "tardiness_min" in row and pd.notna(row["tardiness_min"]) else "0.0"
+        #             })
 
-            st.dataframe(
-                pd.DataFrame(rows),
-                width="stretch",
-                hide_index=True
-            )
-        else:
-            st.write("현재 표시할 투어가 없습니다.")
+        #     st.dataframe(
+        #         pd.DataFrame(rows),
+        #         width="stretch",
+        #         hide_index=True
+        #     )
+        # else:
+        #     st.write("현재 표시할 투어가 없습니다.")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        # st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # Tab 2. 경로 상세
