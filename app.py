@@ -85,7 +85,7 @@ st.markdown(
     .panel-card {{
         background: #FFFFFF;
         border-radius: 14px;
-        padding: 16px 18px;
+        padding: 18px 20px;
         box-shadow: 0 1px 5px rgba(0,0,0,0.07);
         margin-bottom: 14px;
     }}
@@ -94,7 +94,8 @@ st.markdown(
     font-size: 1.1rem;
     color: #374151;
     font-weight: 800;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+    line-height: 1.35;
 }}
     button[data-baseweb="tab"] p {{
     font-size: 1.05rem;
