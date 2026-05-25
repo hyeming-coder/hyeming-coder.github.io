@@ -1023,36 +1023,36 @@ with tab_map:
         else:
             st.write("현재 운행 중인 투어가 없습니다.")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        # st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="panel-card"><div class="panel-title">혼잡도 분포</div>', unsafe_allow_html=True)
+        # st.markdown('<div class="panel-card"><div class="panel-title">혼잡도 분포</div>', unsafe_allow_html=True)
 
-        cong_dist = pd.DataFrame({
-            "혼잡도": ["원활", "서행", "정체"],
-            "링크 수": [n_smooth, n_slow, n_congested]
-        })
+        # cong_dist = pd.DataFrame({
+        #     "혼잡도": ["원활", "서행", "정체"],
+        #     "링크 수": [n_smooth, n_slow, n_congested]
+        # })
 
-        fig_cong = px.bar(
-            cong_dist,
-            x="혼잡도",
-            y="링크 수",
-            text="링크 수",
-            color="혼잡도",
-            color_discrete_map={
-                "원활": "#16A34A",
-                "서행": "#D97706",
-                "정체": COLOR_ACCENT
-            }
-        )
+        # fig_cong = px.bar(
+        #     cong_dist,
+        #     x="혼잡도",
+        #     y="링크 수",
+        #     text="링크 수",
+        #     color="혼잡도",
+        #     color_discrete_map={
+        #         "원활": "#16A34A",
+        #         "서행": "#D97706",
+        #         "정체": COLOR_ACCENT
+        #     }
+        # )
 
-        fig_cong.update_traces(textposition="outside")
-        fig_cong.update_layout(
-            height=260,
-            showlegend=False,
-            margin=dict(l=10, r=10, t=20, b=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
+        # fig_cong.update_traces(textposition="outside")
+        # fig_cong.update_layout(
+        #     height=260,
+        #     showlegend=False,
+        #     margin=dict(l=10, r=10, t=20, b=10),
+        #     paper_bgcolor="rgba(0,0,0,0)",
+        #     plot_bgcolor="rgba(0,0,0,0)"
+        # )
 
         st.plotly_chart(fig_cong, width="stretch")
 
