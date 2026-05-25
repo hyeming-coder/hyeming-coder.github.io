@@ -524,6 +524,47 @@ def add_route_line(fig, lats, lons, color, width, opacity, hover_text):
 # 5. 사이드바: 시나리오 설정
 # ============================================================
 
+# with st.sidebar:
+#     st.header("시나리오 설정")
+
+#     scenario_options = sorted(route_all["urgency_scenario"].dropna().unique())
+#     selected_scenario = st.selectbox(
+#         "긴급도",
+#         scenario_options,
+#         format_func=lambda x: {"high": "높음", "medium": "중간", "low": "낮음"}.get(x, x)
+#     )
+
+#     depot_options = sorted(route_all["depot"].dropna().unique())
+#     selected_depot = st.selectbox("혈액원", depot_options)
+
+#     if "vehicle_count" in route_all.columns:
+#         vehicle_options = sorted(route_all["vehicle_count"].dropna().unique())
+#         selected_vehicle_count = st.selectbox("차량 수", vehicle_options)
+#     else:
+#         selected_vehicle_count = None
+
+#     drone_options = sorted(route_all["drone_count"].dropna().unique())
+#     selected_drone_count = st.selectbox("드론 수", drone_options)
+
+#     st.divider()
+
+#     hour_options = sorted([int(h) for h in pred_df["hour"].dropna().unique()])
+#     start_hour = st.selectbox(
+#         "배송 시작 시간",
+#         hour_options,
+#         index=min(8, len(hour_options) - 1)
+#     )
+
+#     st.divider()
+
+#     show_hospital_nodes = st.checkbox("병원 노드 표시", value=False)
+#     show_route = st.checkbox("배송 경로 표시", value=True)
+#     show_full_tour = st.checkbox("현재 투어 전체 경로 표시", value=True)
+
+# ============================================================
+# 5. 사이드바: 시나리오 설정
+# ============================================================
+
 with st.sidebar:
     st.header("시나리오 설정")
 
@@ -548,12 +589,8 @@ with st.sidebar:
 
     st.divider()
 
-    hour_options = sorted([int(h) for h in pred_df["hour"].dropna().unique()])
-    start_hour = st.selectbox(
-        "배송 시작 시간",
-        hour_options,
-        index=min(8, len(hour_options) - 1)
-    )
+    start_hour = 10
+    st.caption("배송 시작 시간: 10시 기준")
 
     st.divider()
 
