@@ -49,38 +49,38 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }}
 
-    .title-box h1 {
+    .title-box h1 {{
     font-size: 1.85rem;
     margin: 0;
     font-weight: 800;
-}    
-    .title-box p {
+}    }
+    .title-box p {{
     font-size: 1.05rem;
     margin: 8px 0 0 0;
     color: #FEE2E2;
-}
+}}
 
-    .kpi-box {
+    .kpi-box {{
     background: #FFFFFF;
     border-radius: 12px;
     padding: 18px 20px;
     box-shadow: 0 1px 5px rgba(0,0,0,0.07);
     border-left: 4px solid #991B1B;
-}
+}}
 
-    .kpi-label {
+    .kpi-label {{
     font-size: 0.95rem;
     color: #6B7280;
     font-weight: 700;
     margin-bottom: 6px;
-}
+}}
 
-    .kpi-value {
+    .kpi-value {{
     font-size: 2.0rem;
     color: #111827;
     font-weight: 800;
     line-height: 1.1;
-}
+}}
 
     .panel-card {{
         background: #FFFFFF;
@@ -90,16 +90,16 @@ st.markdown(
         margin-bottom: 14px;
     }}
 
-    .panel-title {
+    .panel-title {{
     font-size: 1.1rem;
     color: #374151;
     font-weight: 800;
     margin-bottom: 12px;
-}
-    button[data-baseweb="tab"] p {
+}{
+    button[data-baseweb="tab"] p {{
     font-size: 1.05rem;
     font-weight: 700;
-}
+}}
     </style>
     """,
     unsafe_allow_html=True
