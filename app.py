@@ -590,7 +590,7 @@ with st.sidebar:
     st.divider()
 
     start_hour = 10
-    st.caption("배송 시작 시간: 10시 기준")
+    # st.caption("배송 시작 시간: 10시 기준")
 
     st.divider()
 
