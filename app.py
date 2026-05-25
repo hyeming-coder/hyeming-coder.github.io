@@ -587,7 +587,7 @@ with st.sidebar:
     drone_options = sorted(route_all["drone_count"].dropna().unique())
     selected_drone_count = st.selectbox("드론 수", drone_options)
 
-    st.divider()
+    # st.divider()
 
     start_hour = 10
     # st.caption("배송 시작 시간: 10시 기준")
