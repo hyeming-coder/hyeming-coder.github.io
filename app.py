@@ -856,7 +856,7 @@ with tab_map:
                 marker=dict(
                     size=marker_size,
                     color=COLOR_HOSPITAL,
-                    opacity=0.55
+                    opacity=0.75
                 ),
                 text=(
                     "병원명: " + hosp_df["병원명"].astype(str) +
