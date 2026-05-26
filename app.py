@@ -5,7 +5,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import requests
-
+from streamlit_autorefresh import st_autorefresh
 # ============================================================
 # 0. 페이지 설정
 # ============================================================
@@ -641,15 +641,71 @@ if not selected_route.empty:
 else:
     max_time = 1
 
+# with st.sidebar:
+#     current_time_min = st.slider(
+#         "배송 진행 시간",
+#         min_value=0,
+#         max_value=max(max_time, 1),
+#         value=0,
+#         step=5,
+#         format="%d분"
+#     )
+
+# ============================================================
+# 7-1. 배송 진행 시간 자동 재생 설정
+# ============================================================
+
+# 선택 조건이 바뀌면 영상 시간을 처음부터 다시 시작
+playback_key = (
+    selected_scenario,
+    selected_depot,
+    selected_vehicle_count,
+    selected_drone_count,
+    auto_seed,
+    max_time
+)
+
+if "playback_key" not in st.session_state:
+    st.session_state.playback_key = playback_key
+
+if st.session_state.playback_key != playback_key:
+    st.session_state.playback_key = playback_key
+    st.session_state.current_time_min = 0
+    st.session_state.last_refresh_count = -1
+
+if "current_time_min" not in st.session_state:
+    st.session_state.current_time_min = 0
+
+if "last_refresh_count" not in st.session_state:
+    st.session_state.last_refresh_count = -1
+
+
 with st.sidebar:
-    current_time_min = st.slider(
-        "배송 진행 시간",
-        min_value=0,
-        max_value=max(max_time, 1),
-        value=0,
-        step=5,
-        format="%d분"
+    playback_speed = st.selectbox(
+        "영상 속도",
+        options=[0.5, 1, 2, 4, 8],
+        index=1,
+        format_func=lambda x: f"{x}배속"
     )
+
+# 1초마다 화면 자동 갱신
+refresh_count = st_autorefresh(
+    interval=1000,
+    key="delivery_animation_refresh"
+)
+
+# 새로고침 1번당 진행 시간 증가
+if refresh_count != st.session_state.last_refresh_count:
+    st.session_state.last_refresh_count = refresh_count
+
+    # 1배속 = 실제 1초마다 배송시간 1분 증가
+    st.session_state.current_time_min += playback_speed
+
+    # 끝까지 가면 다시 처음부터 반복 재생
+    if st.session_state.current_time_min > max_time:
+        st.session_state.current_time_min = 0
+
+current_time_min = int(st.session_state.current_time_min)
 
 current_hour = int((int(start_hour) + int(current_time_min // 60)) % 24)
 
