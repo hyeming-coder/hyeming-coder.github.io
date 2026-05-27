@@ -648,6 +648,10 @@ with st.sidebar:
         format_func=lambda x: f"{x}배속"
     )
 
+current_time_min = 0
+current_hour = int((int(start_hour) + int(current_time_min // 60)) % 24)
+hour_df = pred_df[pred_df["hour"] == current_hour].copy()
+
 # Plotly animation frames가 지도 내부에서 시간을 움직이므로,
 # Streamlit 화면 전체를 자동 새로고침하지 않습니다.
 current_time_min = 0
@@ -723,31 +727,20 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-k1, k2, k3, k4, k5 = st.columns(5)
+k1, k2, k3, k4 = st.columns(4)
 
 with k1:
     st.markdown(
         f"""
         <div class="kpi-box">
-            <div class="kpi-label">배송 진행 시간</div>
-            <div class="kpi-value">{current_time_min}분</div>
+            <div class="kpi-label">총 배송 시뮬레이션 시간</div>
+            <div class="kpi-value">{max_time}분</div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
 with k2:
-    st.markdown(
-        f"""
-        <div class="kpi-box">
-            <div class="kpi-label">{current_hour}시 정체 링크 수</div>
-            <div class="kpi-value">{n_congested:,}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-with k3:
     st.markdown(
         f"""
         <div class="kpi-box">
@@ -758,7 +751,7 @@ with k3:
         unsafe_allow_html=True
     )
 
-with k4:
+with k3:
     st.markdown(
         f"""
         <div class="kpi-box">
@@ -769,7 +762,7 @@ with k4:
         unsafe_allow_html=True
     )
 
-with k5:
+with k4:
     st.markdown(
         f"""
         <div class="kpi-box">
@@ -779,7 +772,6 @@ with k5:
         """,
         unsafe_allow_html=True
     )
-
 # ============================================================
 # 12. 탭
 # ============================================================
@@ -795,24 +787,17 @@ tab_map, tab_detail, tab_sens = st.tabs([
 # ============================================================
 
 with tab_map:
-    st.markdown(
-        '<div class="panel-card"><div class="panel-title">배송 진행 애니메이션</div>',
-        unsafe_allow_html=True
-    )
+    map_col, schedule_col = st.columns([1.15, 0.85])
 
     frame_step = 5
     frame_times = list(range(0, max(max_time, 1) + 1, frame_step))
 
-    if frame_times[-1] != max(max_time, 1):
-        frame_times.append(max(max_time, 1))
+    if len(frame_times) == 0:
+        frame_times = [0]
 
-    # ------------------------------------------------------------
-    # 특정 시간 t에서 지도 trace 생성
-    # ------------------------------------------------------------
     def make_map_traces_for_time(t):
         traces = []
 
-        # 범례용 trace
         traces.append(go.Scattermapbox(
             lat=[None],
             lon=[None],
@@ -854,7 +839,6 @@ with tab_map:
             name="현재 위치"
         ))
 
-        # 병원 노드
         if show_hospital_nodes:
             max_beds = hosp_df["일반병상수"].max()
 
@@ -880,7 +864,6 @@ with tab_map:
                 showlegend=False
             ))
 
-        # 혈액원
         traces.append(go.Scattermapbox(
             lat=[depot_lat],
             lon=[depot_lon],
@@ -912,7 +895,6 @@ with tab_map:
                     width = 4
                     label = f"드론 {vehicle_no}"
 
-                # 차량: 현재 tour 전체 경로를 도로망 경로로 표시
                 if mode == "vehicle" and show_full_tour:
                     stops = build_tour_stops(group, depot_lat, depot_lon)
 
@@ -940,7 +922,6 @@ with tab_map:
                             showlegend=False
                         ))
 
-                # 현재 이동 중 또는 복귀 중 구간 강조
                 if status["status"] in ["이동 중", "복귀 중"]:
                     from_label = status["from_label"]
                     to_label = status["to_label"]
@@ -1015,9 +996,6 @@ with tab_map:
 
         return traces
 
-    # ------------------------------------------------------------
-    # 지도 중심 계산
-    # ------------------------------------------------------------
     center_points = [(depot_lat, depot_lon)]
 
     if not selected_route.empty:
@@ -1030,131 +1008,193 @@ with tab_map:
     center_lat = np.mean([p[0] for p in center_points])
     center_lon = np.mean([p[1] for p in center_points])
 
-    # ------------------------------------------------------------
-    # 기본 지도와 animation frame 생성
-    # ------------------------------------------------------------
-    base_traces = make_map_traces_for_time(0)
-    fig = go.Figure(data=base_traces)
+    with map_col:
+        base_traces = make_map_traces_for_time(0)
+        fig = go.Figure(data=base_traces)
 
-    fig.frames = [
-        go.Frame(
-            data=make_map_traces_for_time(t),
-            name=str(t)
-        )
-        for t in frame_times
-    ]
-
-    frame_duration = int(800 / playback_speed)
-
-    # ------------------------------------------------------------
-    # 재생 버튼 + 시간 슬라이더
-    # ------------------------------------------------------------
-    fig.update_layout(
-        mapbox=dict(
-            style="carto-positron",
-            center=dict(lat=center_lat, lon=center_lon),
-            zoom=11.0
-        ),
-        height=760,
-        margin=dict(l=0, r=0, t=0, b=0),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=0.01,
-            xanchor="left",
-            x=0.01,
-            bgcolor="rgba(255,255,255,0.88)",
-            bordercolor="#E5E7EB",
-            borderwidth=1
-        ),
-        updatemenus=[
-            {
-                "type": "buttons",
-                "showactive": False,
-                "x": 0.02,
-                "y": 0.09,
-                "xanchor": "left",
-                "yanchor": "bottom",
-                "bgcolor": "rgba(255,255,255,0.92)",
-                "bordercolor": "#E5E7EB",
-                "borderwidth": 1,
-                "buttons": [
-                    {
-                        "label": "▶ 재생",
-                        "method": "animate",
-                        "args": [
-                            None,
-                            {
-                                "frame": {
-                                    "duration": frame_duration,
-                                    "redraw": True
-                                },
-                                "fromcurrent": True,
-                                "transition": {
-                                    "duration": 0
-                                },
-                                "mode": "immediate"
-                            }
-                        ]
-                    },
-                    {
-                        "label": "⏸ 정지",
-                        "method": "animate",
-                        "args": [
-                            [None],
-                            {
-                                "frame": {
-                                    "duration": 0,
-                                    "redraw": False
-                                },
-                                "mode": "immediate"
-                            }
-                        ]
-                    }
-                ]
-            }
-        ],
-        sliders=[
-            {
-                "active": 0,
-                "x": 0.12,
-                "y": 0.04,
-                "len": 0.78,
-                "xanchor": "left",
-                "yanchor": "bottom",
-                "currentvalue": {
-                    "prefix": "배송 진행 시간: ",
-                    "suffix": "분",
-                    "font": {"size": 15}
-                },
-                "pad": {"t": 35, "b": 10},
-                "steps": [
-                    {
-                        "label": str(t),
-                        "method": "animate",
-                        "args": [
-                            [str(t)],
-                            {
-                                "frame": {
-                                    "duration": 0,
-                                    "redraw": True
-                                },
-                                "transition": {
-                                    "duration": 0
-                                },
-                                "mode": "immediate"
-                            }
-                        ]
-                    }
-                    for t in frame_times
-                ]
-            }
+        fig.frames = [
+            go.Frame(
+                data=make_map_traces_for_time(t),
+                name=str(t)
+            )
+            for t in frame_times
         ]
-    )
 
-    st.plotly_chart(fig, width="stretch")
+        frame_duration = int(800 / playback_speed)
 
-    st.markdown("</div>", unsafe_allow_html=True)
+        fig.update_layout(
+            mapbox=dict(
+                style="carto-positron",
+                center=dict(lat=center_lat, lon=center_lon),
+                zoom=11.0
+            ),
+            height=620,
+            margin=dict(l=0, r=0, t=0, b=0),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=0.01,
+                xanchor="left",
+                x=0.01,
+                bgcolor="rgba(255,255,255,0.88)",
+                bordercolor="#E5E7EB",
+                borderwidth=1
+            ),
+            updatemenus=[
+                {
+                    "type": "buttons",
+                    "showactive": False,
+                    "x": 0.02,
+                    "y": 0.09,
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                    "bgcolor": "rgba(255,255,255,0.92)",
+                    "bordercolor": "#E5E7EB",
+                    "borderwidth": 1,
+                    "buttons": [
+                        {
+                            "label": "▶ 재생",
+                            "method": "animate",
+                            "args": [
+                                None,
+                                {
+                                    "frame": {
+                                        "duration": frame_duration,
+                                        "redraw": True
+                                    },
+                                    "fromcurrent": True,
+                                    "transition": {
+                                        "duration": 0
+                                    },
+                                    "mode": "immediate"
+                                }
+                            ]
+                        },
+                        {
+                            "label": "⏸ 정지",
+                            "method": "animate",
+                            "args": [
+                                [None],
+                                {
+                                    "frame": {
+                                        "duration": 0,
+                                        "redraw": False
+                                    },
+                                    "mode": "immediate"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            sliders=[
+                {
+                    "active": 0,
+                    "x": 0.12,
+                    "y": 0.04,
+                    "len": 0.78,
+                    "xanchor": "left",
+                    "yanchor": "bottom",
+                    "currentvalue": {
+                        "prefix": "배송 진행 시간: ",
+                        "suffix": "분",
+                        "font": {"size": 15}
+                    },
+                    "pad": {"t": 35, "b": 10},
+                    "steps": [
+                        {
+                            "label": str(t),
+                            "method": "animate",
+                            "args": [
+                                [str(t)],
+                                {
+                                    "frame": {
+                                        "duration": 0,
+                                        "redraw": True
+                                    },
+                                    "transition": {
+                                        "duration": 0
+                                    },
+                                    "mode": "immediate"
+                                }
+                            ]
+                        }
+                        for t in frame_times
+                    ]
+                }
+            ]
+        )
+
+        st.plotly_chart(fig, width="stretch")
+
+    with schedule_col:
+        st.markdown(
+            """
+            <div class="panel-card">
+                <div class="panel-title">전체 배송 스케줄</div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if selected_route.empty:
+            st.write("선택한 조건에 해당하는 스케줄이 없습니다.")
+        else:
+            schedule_df = selected_route.copy()
+
+            schedule_df["수단"] = schedule_df["mode"].map({
+                "vehicle": "차량",
+                "drone": "드론"
+            }).fillna(schedule_df["mode"])
+
+            schedule_df["병원"] = schedule_df["hospital"].apply(get_hosp_display_name)
+
+            schedule_df["도착"] = schedule_df["arrival_min"].apply(
+                lambda x: "-" if pd.isna(x) else f"{float(x):.1f}분"
+            )
+
+            if "due_min" in schedule_df.columns:
+                schedule_df["납기"] = schedule_df["due_min"].apply(
+                    lambda x: "-" if pd.isna(x) else f"{float(x):.1f}분"
+                )
+            else:
+                schedule_df["납기"] = "-"
+
+            if "tardiness_min" in schedule_df.columns:
+                schedule_df["지연"] = schedule_df["tardiness_min"].apply(
+                    lambda x: "-" if pd.isna(x) else f"{float(x):.1f}분"
+                )
+            else:
+                schedule_df["지연"] = "-"
+
+            show_schedule_cols = [
+                "수단",
+                "vehicle_no",
+                "tour_no",
+                "visit_order",
+                "병원",
+                "도착",
+                "납기",
+                "지연"
+            ]
+
+            schedule_view = schedule_df[show_schedule_cols].rename(columns={
+                "vehicle_no": "번호",
+                "tour_no": "투어",
+                "visit_order": "순서"
+            })
+
+            schedule_view = schedule_view.sort_values(
+                ["수단", "번호", "투어", "순서"]
+            )
+
+            st.dataframe(
+                schedule_view,
+                width="stretch",
+                height=620,
+                hide_index=True
+            )
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # Tab 2. 경로 상세
