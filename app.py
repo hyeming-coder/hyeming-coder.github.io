@@ -720,7 +720,6 @@ st.markdown(
         
         {selected_depot} 혈액원 |
         차량 {vehicle_label}대 · 드론 {selected_drone_count}대 |
-        
         </p>
     </div>
     """,
