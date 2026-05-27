@@ -717,10 +717,10 @@ st.markdown(
     <div class="title-box">
         <h1>혈액 배송 의사결정 대시보드</h1>
         <p>
-        긴급도 {scenario_label} |
+        
         {selected_depot} 혈액원 |
         차량 {vehicle_label}대 · 드론 {selected_drone_count}대 |
-        {start_hour}시 출발 · 현재 {current_hour}시 혼잡도 반영
+        
         </p>
     </div>
     """,
@@ -787,7 +787,7 @@ tab_map, tab_detail, tab_sens = st.tabs([
 # ============================================================
 
 with tab_map:
-    map_col, schedule_col = st.columns([1.15, 0.85])
+    map_col, schedule_col = st.columns([1.05, 0.95])
 
     frame_step = 5
     frame_times = list(range(0, max(max_time, 1) + 1, frame_step))
@@ -1128,73 +1128,240 @@ with tab_map:
         st.plotly_chart(fig, width="stretch")
 
     with schedule_col:
-        st.markdown(
-            """
-            <div class="panel-card">
-                <div class="panel-title">전체 배송 스케줄</div>
-            """,
-            unsafe_allow_html=True
+    st.markdown(
+        """
+        <div class="panel-card">
+            <div class="panel-title">전체 배송 스케줄 타임라인</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if selected_route.empty:
+        st.write("선택한 조건에 해당하는 스케줄이 없습니다.")
+
+    else:
+        timeline_df = selected_route.copy()
+
+        timeline_df["수단"] = timeline_df["mode"].map({
+            "vehicle": "차량",
+            "drone": "드론"
+        }).fillna(timeline_df["mode"])
+
+        timeline_df["병원"] = timeline_df["hospital"].apply(get_hosp_display_name)
+
+        timeline_df = timeline_df.sort_values(
+            ["mode", "vehicle_no", "tour_no", "visit_order"]
+        ).copy()
+
+        # ------------------------------------------------------------
+        # 각 방문 구간의 시작 시간 계산
+        # 첫 방문: depart_min 사용
+        # 이후 방문: 이전 병원 도착 시간 사용
+        # ------------------------------------------------------------
+        timeline_df["segment_start"] = np.nan
+
+        for _, g in timeline_df.groupby(["mode", "vehicle_no", "tour_no"], sort=False):
+            idxs = list(g.index)
+
+            for i, idx in enumerate(idxs):
+                if i == 0:
+                    if "depart_min" in timeline_df.columns and pd.notna(timeline_df.loc[idx, "depart_min"]):
+                        timeline_df.loc[idx, "segment_start"] = float(timeline_df.loc[idx, "depart_min"])
+                    else:
+                        timeline_df.loc[idx, "segment_start"] = 0.0
+                else:
+                    prev_idx = idxs[i - 1]
+                    timeline_df.loc[idx, "segment_start"] = float(timeline_df.loc[prev_idx, "arrival_min"])
+
+        timeline_df["segment_end"] = timeline_df["arrival_min"].astype(float)
+        timeline_df["duration"] = timeline_df["segment_end"] - timeline_df["segment_start"]
+        timeline_df["duration"] = timeline_df["duration"].clip(lower=0.1)
+
+        timeline_df["자원"] = (
+            timeline_df["수단"].astype(str)
+            + " "
+            + timeline_df["vehicle_no"].astype(str)
+            + " / 투어 "
+            + timeline_df["tour_no"].astype(str)
         )
 
-        if selected_route.empty:
-            st.write("선택한 조건에 해당하는 스케줄이 없습니다.")
-        else:
-            schedule_df = selected_route.copy()
+        timeline_df["지연여부"] = "정상"
 
-            schedule_df["수단"] = schedule_df["mode"].map({
-                "vehicle": "차량",
-                "drone": "드론"
-            }).fillna(schedule_df["mode"])
+        if "tardiness_min" in timeline_df.columns:
+            timeline_df.loc[timeline_df["tardiness_min"].fillna(0) > 0, "지연여부"] = "지연"
 
-            schedule_df["병원"] = schedule_df["hospital"].apply(get_hosp_display_name)
+        timeline_df["hover"] = (
+            "수단: " + timeline_df["수단"].astype(str)
+            + "<br>번호: " + timeline_df["vehicle_no"].astype(str)
+            + "<br>투어: " + timeline_df["tour_no"].astype(str)
+            + "<br>순서: " + timeline_df["visit_order"].astype(str)
+            + "<br>병원: " + timeline_df["병원"].astype(str)
+            + "<br>이동 시작: " + timeline_df["segment_start"].round(1).astype(str) + "분"
+            + "<br>도착: " + timeline_df["segment_end"].round(1).astype(str) + "분"
+        )
 
-            schedule_df["도착"] = schedule_df["arrival_min"].apply(
-                lambda x: "-" if pd.isna(x) else f"{float(x):.1f}분"
+        if "due_min" in timeline_df.columns:
+            timeline_df["hover"] += (
+                "<br>납기: "
+                + timeline_df["due_min"].round(1).astype(str)
+                + "분"
             )
 
-            if "due_min" in schedule_df.columns:
-                schedule_df["납기"] = schedule_df["due_min"].apply(
-                    lambda x: "-" if pd.isna(x) else f"{float(x):.1f}분"
-                )
-            else:
-                schedule_df["납기"] = "-"
-
-            if "tardiness_min" in schedule_df.columns:
-                schedule_df["지연"] = schedule_df["tardiness_min"].apply(
-                    lambda x: "-" if pd.isna(x) else f"{float(x):.1f}분"
-                )
-            else:
-                schedule_df["지연"] = "-"
-
-            show_schedule_cols = [
-                "수단",
-                "vehicle_no",
-                "tour_no",
-                "visit_order",
-                "병원",
-                "도착",
-                "납기",
-                "지연"
-            ]
-
-            schedule_view = schedule_df[show_schedule_cols].rename(columns={
-                "vehicle_no": "번호",
-                "tour_no": "투어",
-                "visit_order": "순서"
-            })
-
-            schedule_view = schedule_view.sort_values(
-                ["수단", "번호", "투어", "순서"]
+        if "tardiness_min" in timeline_df.columns:
+            timeline_df["hover"] += (
+                "<br>지연: "
+                + timeline_df["tardiness_min"].fillna(0).round(1).astype(str)
+                + "분"
             )
 
-            st.dataframe(
-                schedule_view,
-                width="stretch",
-                height=620,
-                hide_index=True
-            )
+        # ------------------------------------------------------------
+        # 타임라인 그래프
+        # ------------------------------------------------------------
+        fig_schedule = go.Figure()
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        normal_df = timeline_df[timeline_df["지연여부"] == "정상"].copy()
+        late_df = timeline_df[timeline_df["지연여부"] == "지연"].copy()
+
+        if not normal_df.empty:
+            fig_schedule.add_trace(go.Bar(
+                x=normal_df["duration"],
+                y=normal_df["자원"],
+                base=normal_df["segment_start"],
+                orientation="h",
+                text=normal_df["병원"],
+                textposition="inside",
+                insidetextanchor="middle",
+                hovertext=normal_df["hover"],
+                hoverinfo="text",
+                marker=dict(
+                    color="rgba(127,29,29,0.70)",
+                    line=dict(color="rgba(127,29,29,1.0)", width=1)
+                ),
+                name="정상"
+            ))
+
+        if not late_df.empty:
+            fig_schedule.add_trace(go.Bar(
+                x=late_df["duration"],
+                y=late_df["자원"],
+                base=late_df["segment_start"],
+                orientation="h",
+                text=late_df["병원"],
+                textposition="inside",
+                insidetextanchor="middle",
+                hovertext=late_df["hover"],
+                hoverinfo="text",
+                marker=dict(
+                    color="rgba(220,38,38,0.85)",
+                    line=dict(color="rgba(127,29,29,1.0)", width=1)
+                ),
+                name="지연"
+            ))
+
+        # 납기 시간 표시선
+        if "due_min" in timeline_df.columns:
+            due_df = timeline_df.dropna(subset=["due_min"]).copy()
+
+            if not due_df.empty:
+                fig_schedule.add_trace(go.Scatter(
+                    x=due_df["due_min"],
+                    y=due_df["자원"],
+                    mode="markers",
+                    marker=dict(
+                        symbol="line-ns-open",
+                        size=16,
+                        color="#111827",
+                        line=dict(width=2)
+                    ),
+                    text=(
+                        "납기: "
+                        + due_df["due_min"].round(1).astype(str)
+                        + "분<br>병원: "
+                        + due_df["병원"].astype(str)
+                    ),
+                    hoverinfo="text",
+                    name="납기"
+                ))
+
+        fig_schedule.update_layout(
+            height=430,
+            barmode="overlay",
+            xaxis=dict(
+                title="배송 진행 시간(분)",
+                range=[0, max(max_time, 1) + 20],
+                gridcolor="#E5E7EB"
+            ),
+            yaxis=dict(
+                title="",
+                autorange="reversed"
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=10, r=10, t=30, b=20),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+
+        st.plotly_chart(fig_schedule, width="stretch")
+
+        # ------------------------------------------------------------
+        # 아래쪽: 차량/드론별 요약 카드
+        # ------------------------------------------------------------
+        summary_cards = (
+            timeline_df
+            .groupby(["수단", "vehicle_no"], as_index=False)
+            .agg(
+                투어수=("tour_no", "nunique"),
+                방문수=("hospital", "count"),
+                마지막도착=("arrival_min", "max")
+            )
+            .sort_values(["수단", "vehicle_no"])
+        )
+
+        card_html = """
+        <div style="
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 8px;
+        ">
+        """
+
+        for _, row in summary_cards.iterrows():
+            card_html += f"""
+            <div style="
+                background: #F9FAFB;
+                border: 1px solid #E5E7EB;
+                border-radius: 12px;
+                padding: 12px 14px;
+            ">
+                <div style="
+                    font-weight: 800;
+                    color: #111827;
+                    font-size: 0.95rem;
+                    margin-bottom: 6px;
+                ">
+                    {row['수단']} {row['vehicle_no']}
+                </div>
+                <div style="font-size: 0.85rem; color: #4B5563;">
+                    투어 {int(row['투어수'])}개 · 방문 {int(row['방문수'])}곳
+                </div>
+                <div style="font-size: 0.85rem; color: #991B1B; font-weight: 700;">
+                    마지막 도착 {float(row['마지막도착']):.1f}분
+                </div>
+            </div>
+            """
+
+        card_html += "</div>"
+
+        st.markdown(card_html, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # Tab 2. 경로 상세
