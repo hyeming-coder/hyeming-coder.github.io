@@ -982,7 +982,7 @@ with tab_map:
                     f'{badges}</div>'
                 )
 
-            icon = "차량" if 수단 == "차량" else "드론"
+            icon = "🚗" if 수단 == "차량" else "🚁"
             late_badge = (
                 f'<span style="background:#FEE2E2;color:#DC2626;border-radius:5px;'
                 f'padding:2px 7px;font-size:0.75rem;font-weight:700;">지연 {지연수}건</span>'
