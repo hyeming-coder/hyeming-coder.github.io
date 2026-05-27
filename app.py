@@ -5,7 +5,6 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 import requests
-from streamlit_autorefresh import st_autorefresh
 # ============================================================
 # 0. 페이지 설정
 # ============================================================
@@ -642,16 +641,19 @@ else:
     max_time = 1
 
 with st.sidebar:
-    current_time_min = st.slider(
-        "배송 진행 시간",
-        min_value=0,
-        max_value=max(max_time, 1),
-        value=0,
-        step=5,
-        format="%d분"
+    playback_speed = st.selectbox(
+        "영상 속도",
+        options=[0.5, 1, 2, 4, 8],
+        index=1,
+        format_func=lambda x: f"{x}배속"
     )
 
+# Plotly animation frames가 지도 내부에서 시간을 움직이므로,
+# Streamlit 화면 전체를 자동 새로고침하지 않습니다.
+current_time_min = 0
 
+current_hour = int((int(start_hour) + int(current_time_min // 60)) % 24)
+hour_df = pred_df[pred_df["hour"] == current_hour].copy()
 
 # ============================================================
 # 8. 혈액원 좌표 자동 설정
@@ -789,19 +791,29 @@ tab_map, tab_detail, tab_sens = st.tabs([
 ])
 
 # ============================================================
-# Tab 1. 배송 진행 지도
+# Tab 1. 배송 진행 지도 - Plotly animation frames 버전
 # ============================================================
 
 with tab_map:
-    map_col, panel_col = st.columns([1.18, 0.82])
+    st.markdown(
+        '<div class="panel-card"><div class="panel-title">배송 진행 애니메이션</div>',
+        unsafe_allow_html=True
+    )
 
-    current_status_rows = []
+    frame_step = 5
+    frame_times = list(range(0, max(max_time, 1) + 1, frame_step))
 
-    with map_col:
-        fig = go.Figure()
+    if frame_times[-1] != max(max_time, 1):
+        frame_times.append(max(max_time, 1))
+
+    # ------------------------------------------------------------
+    # 특정 시간 t에서 지도 trace 생성
+    # ------------------------------------------------------------
+    def make_map_traces_for_time(t):
+        traces = []
 
         # 범례용 trace
-        fig.add_trace(go.Scattermapbox(
+        traces.append(go.Scattermapbox(
             lat=[None],
             lon=[None],
             mode="markers",
@@ -809,7 +821,7 @@ with tab_map:
             name="병원"
         ))
 
-        fig.add_trace(go.Scattermapbox(
+        traces.append(go.Scattermapbox(
             lat=[None],
             lon=[None],
             mode="markers",
@@ -817,7 +829,7 @@ with tab_map:
             name="혈액원"
         ))
 
-        fig.add_trace(go.Scattermapbox(
+        traces.append(go.Scattermapbox(
             lat=[None],
             lon=[None],
             mode="lines",
@@ -826,7 +838,7 @@ with tab_map:
         ))
 
         if selected_drone_count > 0:
-            fig.add_trace(go.Scattermapbox(
+            traces.append(go.Scattermapbox(
                 lat=[None],
                 lon=[None],
                 mode="lines",
@@ -834,7 +846,7 @@ with tab_map:
                 name="드론 경로"
             ))
 
-        fig.add_trace(go.Scattermapbox(
+        traces.append(go.Scattermapbox(
             lat=[None],
             lon=[None],
             mode="markers",
@@ -851,7 +863,7 @@ with tab_map:
             else:
                 marker_size = 6
 
-            fig.add_trace(go.Scattermapbox(
+            traces.append(go.Scattermapbox(
                 lat=hosp_df["lat"],
                 lon=hosp_df["lon"],
                 mode="markers",
@@ -869,7 +881,7 @@ with tab_map:
             ))
 
         # 혈액원
-        fig.add_trace(go.Scattermapbox(
+        traces.append(go.Scattermapbox(
             lat=[depot_lat],
             lon=[depot_lon],
             mode="markers+text",
@@ -881,13 +893,12 @@ with tab_map:
             showlegend=False
         ))
 
-        # 현재 운행 중인 tour만 선택
-        active_tours = select_active_tours(selected_route, current_time_min)
+        active_tours = select_active_tours(selected_route, t)
 
         if show_route and active_tours:
             for mode, vehicle_no, tour_no, group in active_tours:
                 group = group.sort_values("visit_order")
-                status = get_route_status(group, current_time_min)
+                status = get_route_status(group, t)
 
                 if status is None:
                     continue
@@ -908,15 +919,26 @@ with tab_map:
                     if len(stops) >= 2:
                         tour_lats, tour_lons = get_osrm_tour_route(stops)
 
-                        add_route_line(
-                            fig,
-                            tour_lats,
-                            tour_lons,
-                            color=color,
-                            width=3,
-                            opacity=0.25,
-                            hover_text=f"{label} / 투어 {tour_no} 전체 경로"
-                        )
+                        traces.append(go.Scattermapbox(
+                            lat=tour_lats,
+                            lon=tour_lons,
+                            mode="lines",
+                            line=dict(width=7, color="rgba(255,255,255,0.82)"),
+                            opacity=1.0,
+                            hoverinfo="skip",
+                            showlegend=False
+                        ))
+
+                        traces.append(go.Scattermapbox(
+                            lat=tour_lats,
+                            lon=tour_lons,
+                            mode="lines",
+                            line=dict(width=3, color=color),
+                            opacity=0.28,
+                            hoverinfo="text",
+                            text=f"{label} / 투어 {tour_no} 전체 경로",
+                            showlegend=False
+                        ))
 
                 # 현재 이동 중 또는 복귀 중 구간 강조
                 if status["status"] in ["이동 중", "복귀 중"]:
@@ -931,199 +953,208 @@ with tab_map:
 
                     if mode == "vehicle":
                         seg_lats, seg_lons = get_osrm_segment_route(lat1, lon1, lat2, lon2)
-
-                        add_route_line(
-                            fig,
-                            seg_lats,
-                            seg_lons,
-                            color=color,
-                            width=width,
-                            opacity=0.98,
-                            hover_text=(
-                                f"{label} / 투어 {tour_no}<br>"
-                                f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
-                                f"상태: {status['status']}<br>"
-                                f"진행률: {status['progress'] * 100:.1f}%"
-                            )
-                        )
-
-                        pos_lat, pos_lon = point_along_polyline(
-                            seg_lats,
-                            seg_lons,
-                            status["progress"]
-                        )
-
                     else:
-                        # 드론은 직선
-                        d_lats, d_lons = make_straight_path(lat1, lon1, lat2, lon2)
+                        seg_lats, seg_lons = make_straight_path(lat1, lon1, lat2, lon2)
 
-                        fig.add_trace(go.Scattermapbox(
-                            lat=d_lats,
-                            lon=d_lons,
-                            mode="lines",
-                            line=dict(width=width, color=color),
-                            opacity=0.92,
-                            hoverinfo="text",
-                            text=(
-                                f"{label} / 투어 {tour_no}<br>"
-                                f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
-                                f"상태: {status['status']}<br>"
-                                f"진행률: {status['progress'] * 100:.1f}%"
-                            ),
-                            showlegend=False
-                        ))
+                    traces.append(go.Scattermapbox(
+                        lat=seg_lats,
+                        lon=seg_lons,
+                        mode="lines",
+                        line=dict(width=width + 4, color="rgba(255,255,255,0.88)"),
+                        opacity=1.0,
+                        hoverinfo="skip",
+                        showlegend=False
+                    ))
 
-                        pos_lat, pos_lon = point_along_polyline(
-                            d_lats,
-                            d_lons,
-                            status["progress"]
-                        )
+                    traces.append(go.Scattermapbox(
+                        lat=seg_lats,
+                        lon=seg_lons,
+                        mode="lines",
+                        line=dict(width=width, color=color),
+                        opacity=0.98,
+                        hoverinfo="text",
+                        text=(
+                            f"{label} / 투어 {tour_no}<br>"
+                            f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
+                            f"상태: {status['status']}<br>"
+                            f"진행률: {status['progress'] * 100:.1f}%"
+                        ),
+                        showlegend=False
+                    ))
 
-                    # 현재 위치
+                    pos_lat, pos_lon = point_along_polyline(
+                        seg_lats,
+                        seg_lons,
+                        status["progress"]
+                    )
+
                     if pos_lat is not None:
-                        fig.add_trace(go.Scattermapbox(
+                        traces.append(go.Scattermapbox(
                             lat=[pos_lat],
                             lon=[pos_lon],
                             mode="markers",
-                            marker=dict(size=22, color="#FFFFFF", opacity=1),
+                            marker=dict(size=23, color="#FFFFFF", opacity=1),
                             hoverinfo="skip",
                             showlegend=False
                         ))
 
-                        fig.add_trace(go.Scattermapbox(
+                        traces.append(go.Scattermapbox(
                             lat=[pos_lat],
                             lon=[pos_lon],
                             mode="markers",
-                            marker=dict(size=14, color=COLOR_CURRENT, opacity=0.98),
+                            marker=dict(size=15, color=COLOR_CURRENT, opacity=0.98),
                             hoverinfo="text",
                             hovertext=(
                                 f"{label} 현재 위치<br>"
                                 f"투어 {tour_no}<br>"
-                                f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}"
+                                f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
+                                f"배송 진행 시간: {t}분"
                             ),
                             showlegend=False
                         ))
 
-                current_status_rows.append({
-                    "수단": "차량" if mode == "vehicle" else "드론",
-                    "번호": f"{vehicle_no}",
-                    "투어": tour_no,
-                    "상태": status["status"],
-                    "출발지": get_hosp_display_name(status["from_label"]),
-                    "목적지": get_hosp_display_name(status["to_label"]),
-                    "진행률": f"{status['progress'] * 100:.1f}%"
-                })
+        return traces
 
-        # 지도 중심
-        center_points = [(depot_lat, depot_lon)]
+    # ------------------------------------------------------------
+    # 지도 중심 계산
+    # ------------------------------------------------------------
+    center_points = [(depot_lat, depot_lon)]
 
-        if active_tours:
-            for _, _, _, group in active_tours:
-                for h in group["hospital"].unique():
-                    lat, lon = get_hosp_coord(h)
+    if not selected_route.empty:
+        for h in selected_route["hospital"].dropna().unique():
+            lat, lon = get_hosp_coord(h)
 
-                    if lat is not None:
-                        center_points.append((lat, lon))
+            if lat is not None:
+                center_points.append((lat, lon))
 
-        center_lat = np.mean([p[0] for p in center_points])
-        center_lon = np.mean([p[1] for p in center_points])
+    center_lat = np.mean([p[0] for p in center_points])
+    center_lon = np.mean([p[1] for p in center_points])
 
-        fig.update_layout(
-            mapbox=dict(
-                style="carto-positron",
-                center=dict(lat=center_lat, lon=center_lon),
-                zoom=11.2
-            ),
-            height=720,
-            margin=dict(l=0, r=0, t=0, b=0),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=0.01,
-                xanchor="left",
-                x=0.01,
-                bgcolor="rgba(255,255,255,0.88)",
-                bordercolor="#E5E7EB",
-                borderwidth=1
-            )
+    # ------------------------------------------------------------
+    # 기본 지도와 animation frame 생성
+    # ------------------------------------------------------------
+    base_traces = make_map_traces_for_time(0)
+    fig = go.Figure(data=base_traces)
+
+    fig.frames = [
+        go.Frame(
+            data=make_map_traces_for_time(t),
+            name=str(t)
         )
+        for t in frame_times
+    ]
 
-        st.plotly_chart(fig, width="stretch")
+    frame_duration = int(800 / playback_speed)
 
-    with panel_col:
-        st.markdown('<div class="panel-card"><div class="panel-title">현재 이동 현황</div>', unsafe_allow_html=True)
+    # ------------------------------------------------------------
+    # 재생 버튼 + 시간 슬라이더
+    # ------------------------------------------------------------
+    fig.update_layout(
+        mapbox=dict(
+            style="carto-positron",
+            center=dict(lat=center_lat, lon=center_lon),
+            zoom=11.0
+        ),
+        height=760,
+        margin=dict(l=0, r=0, t=0, b=0),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=0.01,
+            xanchor="left",
+            x=0.01,
+            bgcolor="rgba(255,255,255,0.88)",
+            bordercolor="#E5E7EB",
+            borderwidth=1
+        ),
+        updatemenus=[
+            {
+                "type": "buttons",
+                "showactive": False,
+                "x": 0.02,
+                "y": 0.09,
+                "xanchor": "left",
+                "yanchor": "bottom",
+                "bgcolor": "rgba(255,255,255,0.92)",
+                "bordercolor": "#E5E7EB",
+                "borderwidth": 1,
+                "buttons": [
+                    {
+                        "label": "▶ 재생",
+                        "method": "animate",
+                        "args": [
+                            None,
+                            {
+                                "frame": {
+                                    "duration": frame_duration,
+                                    "redraw": True
+                                },
+                                "fromcurrent": True,
+                                "transition": {
+                                    "duration": 0
+                                },
+                                "mode": "immediate"
+                            }
+                        ]
+                    },
+                    {
+                        "label": "⏸ 정지",
+                        "method": "animate",
+                        "args": [
+                            [None],
+                            {
+                                "frame": {
+                                    "duration": 0,
+                                    "redraw": False
+                                },
+                                "mode": "immediate"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        sliders=[
+            {
+                "active": 0,
+                "x": 0.12,
+                "y": 0.04,
+                "len": 0.78,
+                "xanchor": "left",
+                "yanchor": "bottom",
+                "currentvalue": {
+                    "prefix": "배송 진행 시간: ",
+                    "suffix": "분",
+                    "font": {"size": 15}
+                },
+                "pad": {"t": 35, "b": 10},
+                "steps": [
+                    {
+                        "label": str(t),
+                        "method": "animate",
+                        "args": [
+                            [str(t)],
+                            {
+                                "frame": {
+                                    "duration": 0,
+                                    "redraw": True
+                                },
+                                "transition": {
+                                    "duration": 0
+                                },
+                                "mode": "immediate"
+                            }
+                        ]
+                    }
+                    for t in frame_times
+                ]
+            }
+        ]
+    )
 
-        if current_status_rows:
-            st.dataframe(
-                pd.DataFrame(current_status_rows),
-                width="stretch",
-                hide_index=True
-            )
-        else:
-            st.write("현재 운행 중인 투어가 없습니다.")
+    st.plotly_chart(fig, width="stretch")
 
-        # st.markdown("</div>", unsafe_allow_html=True)
-
-        # st.markdown('<div class="panel-card"><div class="panel-title">혼잡도 분포</div>', unsafe_allow_html=True)
-
-        # cong_dist = pd.DataFrame({
-        #     "혼잡도": ["원활", "서행", "정체"],
-        #     "링크 수": [n_smooth, n_slow, n_congested]
-        # })
-
-        # fig_cong = px.bar(
-        #     cong_dist,
-        #     x="혼잡도",
-        #     y="링크 수",
-        #     text="링크 수",
-        #     color="혼잡도",
-        #     color_discrete_map={
-        #         "원활": "#16A34A",
-        #         "서행": "#D97706",
-        #         "정체": COLOR_ACCENT
-        #     }
-        # )
-
-        # fig_cong.update_traces(textposition="outside")
-        # fig_cong.update_layout(
-        #     height=260,
-        #     showlegend=False,
-        #     margin=dict(l=10, r=10, t=20, b=10),
-        #     paper_bgcolor="rgba(0,0,0,0)",
-        #     plot_bgcolor="rgba(0,0,0,0)"
-        # )
-
-        # st.plotly_chart(fig_cong, width="stretch")
-
-        # st.markdown("</div>", unsafe_allow_html=True)
-
-        # st.markdown('<div class="panel-card"><div class="panel-title">현재 투어 방문 순서</div>', unsafe_allow_html=True)
-
-        # if active_tours:
-        #     rows = []
-
-        #     for mode, vehicle_no, tour_no, group in active_tours:
-        #         for _, row in group.sort_values("visit_order").iterrows():
-        #             rows.append({
-        #                 "수단": "차량" if mode == "vehicle" else "드론",
-        #                 "번호": vehicle_no,
-        #                 "투어": tour_no,
-        #                 "순서": row["visit_order"],
-        #                 "병원": get_hosp_display_name(row["hospital"]),
-        #                 "도착": f"{row['arrival_min']:.1f}",
-        #                 "납기": f"{row['due_min']:.1f}" if "due_min" in row and pd.notna(row["due_min"]) else "-",
-        #                 "지연": f"{row['tardiness_min']:.1f}" if "tardiness_min" in row and pd.notna(row["tardiness_min"]) else "0.0"
-        #             })
-
-        #     st.dataframe(
-        #         pd.DataFrame(rows),
-        #         width="stretch",
-        #         hide_index=True
-        #     )
-        # else:
-        #     st.write("현재 표시할 투어가 없습니다.")
-
-        # st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================================
 # Tab 2. 경로 상세
