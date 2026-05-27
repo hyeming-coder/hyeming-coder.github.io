@@ -716,11 +716,7 @@ st.markdown(
     f"""
     <div class="title-box">
         <h1>혈액 배송 의사결정 대시보드</h1>
-        <p>
-        
-        {selected_depot} 혈액원 |
-        차량 {vehicle_label}대 · 드론 {selected_drone_count}대 |
-        </p>
+        <p>{selected_depot} 혈액원 | 차량 {vehicle_label}대 · 드론 {selected_drone_count}대</p>
     </div>
     """,
     unsafe_allow_html=True
