@@ -761,7 +761,7 @@ with k4:
     st.markdown(
         f"""
         <div class="kpi-box">
-            <div class="kpi-label">평균 T_max</div>
+            <div class="kpi-label">평균 지연</div>
             <div class="kpi-value">{"-" if pd.isna(tmax_value) else f"{tmax_value:.1f}분"}</div>
         </div>
         """,
