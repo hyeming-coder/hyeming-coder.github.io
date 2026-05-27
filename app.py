@@ -783,585 +783,234 @@ tab_map, tab_detail, tab_sens = st.tabs([
 ])
 
 # ============================================================
-# Tab 1. 배송 진행 지도 - Plotly animation frames 버전
+# Tab 1. 배송 진행 지도 - 지도 전체너비 + 아래 카드 요약
 # ============================================================
 
 with tab_map:
-    map_col, schedule_col = st.columns([1.05, 0.95])
-
     frame_step = 5
     frame_times = list(range(0, max(max_time, 1) + 1, frame_step))
-
     if len(frame_times) == 0:
         frame_times = [0]
 
     def make_map_traces_for_time(t):
         traces = []
-
-        traces.append(go.Scattermapbox(
-            lat=[None],
-            lon=[None],
-            mode="markers",
-            marker=dict(size=9, color=COLOR_HOSPITAL),
-            name="병원"
-        ))
-
-        traces.append(go.Scattermapbox(
-            lat=[None],
-            lon=[None],
-            mode="markers",
-            marker=dict(size=14, color=COLOR_ACCENT),
-            name="혈액원"
-        ))
-
-        traces.append(go.Scattermapbox(
-            lat=[None],
-            lon=[None],
-            mode="lines",
-            line=dict(width=5, color=COLOR_VEHICLE),
-            name="차량 경로"
-        ))
-
+        traces.append(go.Scattermapbox(lat=[None], lon=[None], mode="markers",
+            marker=dict(size=9, color=COLOR_HOSPITAL), name="병원"))
+        traces.append(go.Scattermapbox(lat=[None], lon=[None], mode="markers",
+            marker=dict(size=14, color=COLOR_ACCENT), name="혈액원"))
+        traces.append(go.Scattermapbox(lat=[None], lon=[None], mode="lines",
+            line=dict(width=5, color=COLOR_VEHICLE), name="차량 경로"))
         if selected_drone_count > 0:
-            traces.append(go.Scattermapbox(
-                lat=[None],
-                lon=[None],
-                mode="lines",
-                line=dict(width=4, color=COLOR_DRONE),
-                name="드론 경로"
-            ))
-
-        traces.append(go.Scattermapbox(
-            lat=[None],
-            lon=[None],
-            mode="markers",
-            marker=dict(size=14, color=COLOR_CURRENT),
-            name="현재 위치"
-        ))
+            traces.append(go.Scattermapbox(lat=[None], lon=[None], mode="lines",
+                line=dict(width=4, color=COLOR_DRONE), name="드론 경로"))
+        traces.append(go.Scattermapbox(lat=[None], lon=[None], mode="markers",
+            marker=dict(size=14, color=COLOR_CURRENT), name="현재 위치"))
 
         if show_hospital_nodes:
             max_beds = hosp_df["일반병상수"].max()
-
-            if max_beds > 0:
-                marker_size = 5 + (hosp_df["일반병상수"] / max_beds) * 10
-            else:
-                marker_size = 6
-
+            marker_size = 5 + (hosp_df["일반병상수"] / max_beds) * 10 if max_beds > 0 else 6
             traces.append(go.Scattermapbox(
-                lat=hosp_df["lat"],
-                lon=hosp_df["lon"],
-                mode="markers",
-                marker=dict(
-                    size=marker_size,
-                    color=COLOR_HOSPITAL,
-                    opacity=0.75
-                ),
-                text=(
-                    "병원명: " + hosp_df["병원명"].astype(str) +
-                    "<br>병상수: " + hosp_df["일반병상수"].astype(str)
-                ),
-                hoverinfo="text",
-                showlegend=False
-            ))
+                lat=hosp_df["lat"], lon=hosp_df["lon"], mode="markers",
+                marker=dict(size=marker_size, color=COLOR_HOSPITAL, opacity=0.75),
+                text="병원명: " + hosp_df["병원명"].astype(str) + "<br>병상수: " + hosp_df["일반병상수"].astype(str),
+                hoverinfo="text", showlegend=False))
 
         traces.append(go.Scattermapbox(
-            lat=[depot_lat],
-            lon=[depot_lon],
-            mode="markers+text",
+            lat=[depot_lat], lon=[depot_lon], mode="markers+text",
             marker=dict(size=24, color=COLOR_ACCENT, opacity=0.95),
-            text=[f"{selected_depot} 혈액원"],
-            textposition="top right",
-            hoverinfo="text",
-            hovertext=f"{selected_depot} 혈액원<br>차량·드론 출발 및 복귀 거점",
-            showlegend=False
-        ))
+            text=[f"{selected_depot} 혈액원"], textposition="top right",
+            hoverinfo="text", hovertext=f"{selected_depot} 혈액원<br>차량·드론 출발 및 복귀 거점",
+            showlegend=False))
 
         active_tours = select_active_tours(selected_route, t)
-
         if show_route and active_tours:
             for mode, vehicle_no, tour_no, group in active_tours:
                 group = group.sort_values("visit_order")
                 status = get_route_status(group, t)
-
                 if status is None:
                     continue
-
-                if mode == "vehicle":
-                    color = COLOR_VEHICLE
-                    width = 5
-                    label = f"차량 {vehicle_no}"
-                else:
-                    color = COLOR_DRONE
-                    width = 4
-                    label = f"드론 {vehicle_no}"
+                color = COLOR_VEHICLE if mode == "vehicle" else COLOR_DRONE
+                width = 5 if mode == "vehicle" else 4
+                label = f"차량 {vehicle_no}" if mode == "vehicle" else f"드론 {vehicle_no}"
 
                 if mode == "vehicle" and show_full_tour:
                     stops = build_tour_stops(group, depot_lat, depot_lon)
-
                     if len(stops) >= 2:
                         tour_lats, tour_lons = get_osrm_tour_route(stops)
-
-                        traces.append(go.Scattermapbox(
-                            lat=tour_lats,
-                            lon=tour_lons,
-                            mode="lines",
-                            line=dict(width=7, color="rgba(255,255,255,0.82)"),
-                            opacity=1.0,
-                            hoverinfo="skip",
-                            showlegend=False
-                        ))
-
-                        traces.append(go.Scattermapbox(
-                            lat=tour_lats,
-                            lon=tour_lons,
-                            mode="lines",
-                            line=dict(width=3, color=color),
-                            opacity=0.28,
-                            hoverinfo="text",
-                            text=f"{label} / 투어 {tour_no} 전체 경로",
-                            showlegend=False
-                        ))
+                        traces.append(go.Scattermapbox(lat=tour_lats, lon=tour_lons, mode="lines",
+                            line=dict(width=7, color="rgba(255,255,255,0.82)"), opacity=1.0,
+                            hoverinfo="skip", showlegend=False))
+                        traces.append(go.Scattermapbox(lat=tour_lats, lon=tour_lons, mode="lines",
+                            line=dict(width=3, color=color), opacity=0.28,
+                            hoverinfo="text", text=f"{label} / 투어 {tour_no} 전체 경로",
+                            showlegend=False))
 
                 if status["status"] in ["이동 중", "복귀 중"]:
                     from_label = status["from_label"]
-                    to_label = status["to_label"]
-
+                    to_label   = status["to_label"]
                     lat1, lon1 = get_point(from_label, depot_lat, depot_lon)
-                    lat2, lon2 = get_point(to_label, depot_lat, depot_lon)
-
+                    lat2, lon2 = get_point(to_label,   depot_lat, depot_lon)
                     if lat1 is None or lat2 is None:
                         continue
-
                     if mode == "vehicle":
                         seg_lats, seg_lons = get_osrm_segment_route(lat1, lon1, lat2, lon2)
                     else:
                         seg_lats, seg_lons = make_straight_path(lat1, lon1, lat2, lon2)
 
-                    traces.append(go.Scattermapbox(
-                        lat=seg_lats,
-                        lon=seg_lons,
-                        mode="lines",
-                        line=dict(width=width + 4, color="rgba(255,255,255,0.88)"),
-                        opacity=1.0,
-                        hoverinfo="skip",
-                        showlegend=False
-                    ))
-
-                    traces.append(go.Scattermapbox(
-                        lat=seg_lats,
-                        lon=seg_lons,
-                        mode="lines",
-                        line=dict(width=width, color=color),
-                        opacity=0.98,
+                    traces.append(go.Scattermapbox(lat=seg_lats, lon=seg_lons, mode="lines",
+                        line=dict(width=width+4, color="rgba(255,255,255,0.88)"), opacity=1.0,
+                        hoverinfo="skip", showlegend=False))
+                    traces.append(go.Scattermapbox(lat=seg_lats, lon=seg_lons, mode="lines",
+                        line=dict(width=width, color=color), opacity=0.98,
                         hoverinfo="text",
-                        text=(
-                            f"{label} / 투어 {tour_no}<br>"
-                            f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
-                            f"상태: {status['status']}<br>"
-                            f"진행률: {status['progress'] * 100:.1f}%"
-                        ),
-                        showlegend=False
-                    ))
+                        text=(f"{label} / 투어 {tour_no}<br>"
+                              f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
+                              f"상태: {status['status']}<br>"
+                              f"진행률: {status['progress']*100:.1f}%"),
+                        showlegend=False))
 
-                    pos_lat, pos_lon = point_along_polyline(
-                        seg_lats,
-                        seg_lons,
-                        status["progress"]
-                    )
-
+                    pos_lat, pos_lon = point_along_polyline(seg_lats, seg_lons, status["progress"])
                     if pos_lat is not None:
-                        traces.append(go.Scattermapbox(
-                            lat=[pos_lat],
-                            lon=[pos_lon],
-                            mode="markers",
+                        traces.append(go.Scattermapbox(lat=[pos_lat], lon=[pos_lon], mode="markers",
                             marker=dict(size=23, color="#FFFFFF", opacity=1),
-                            hoverinfo="skip",
-                            showlegend=False
-                        ))
-
-                        traces.append(go.Scattermapbox(
-                            lat=[pos_lat],
-                            lon=[pos_lon],
-                            mode="markers",
+                            hoverinfo="skip", showlegend=False))
+                        traces.append(go.Scattermapbox(lat=[pos_lat], lon=[pos_lon], mode="markers",
                             marker=dict(size=15, color=COLOR_CURRENT, opacity=0.98),
                             hoverinfo="text",
-                            hovertext=(
-                                f"{label} 현재 위치<br>"
-                                f"투어 {tour_no}<br>"
-                                f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
-                                f"배송 진행 시간: {t}분"
-                            ),
-                            showlegend=False
-                        ))
-
+                            hovertext=(f"{label} 현재 위치<br>투어 {tour_no}<br>"
+                                       f"{get_hosp_display_name(from_label)} → {get_hosp_display_name(to_label)}<br>"
+                                       f"배송 진행 시간: {t}분"),
+                            showlegend=False))
         return traces
 
     center_points = [(depot_lat, depot_lon)]
-
     if not selected_route.empty:
         for h in selected_route["hospital"].dropna().unique():
             lat, lon = get_hosp_coord(h)
-
             if lat is not None:
                 center_points.append((lat, lon))
-
     center_lat = np.mean([p[0] for p in center_points])
     center_lon = np.mean([p[1] for p in center_points])
 
-    with map_col:
-        base_traces = make_map_traces_for_time(0)
-        fig = go.Figure(data=base_traces)
-
-        fig.frames = [
-            go.Frame(
-                data=make_map_traces_for_time(t),
-                name=str(t)
-            )
-            for t in frame_times
-        ]
-
-        frame_duration = int(800 / playback_speed)
-
-        fig.update_layout(
-            mapbox=dict(
-                style="carto-positron",
-                center=dict(lat=center_lat, lon=center_lon),
-                zoom=11.0
-            ),
-            height=620,
-            margin=dict(l=0, r=0, t=0, b=0),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=0.01,
-                xanchor="left",
-                x=0.01,
-                bgcolor="rgba(255,255,255,0.88)",
-                bordercolor="#E5E7EB",
-                borderwidth=1
-            ),
-            updatemenus=[
-                {
-                    "type": "buttons",
-                    "showactive": False,
-                    "x": 0.02,
-                    "y": 0.09,
-                    "xanchor": "left",
-                    "yanchor": "bottom",
-                    "bgcolor": "rgba(255,255,255,0.92)",
-                    "bordercolor": "#E5E7EB",
-                    "borderwidth": 1,
-                    "buttons": [
-                        {
-                            "label": "▶ 재생",
-                            "method": "animate",
-                            "args": [
-                                None,
-                                {
-                                    "frame": {
-                                        "duration": frame_duration,
-                                        "redraw": True
-                                    },
-                                    "fromcurrent": True,
-                                    "transition": {
-                                        "duration": 0
-                                    },
-                                    "mode": "immediate"
-                                }
-                            ]
-                        },
-                        {
-                            "label": "⏸ 정지",
-                            "method": "animate",
-                            "args": [
-                                [None],
-                                {
-                                    "frame": {
-                                        "duration": 0,
-                                        "redraw": False
-                                    },
-                                    "mode": "immediate"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ],
-            sliders=[
-                {
-                    "active": 0,
-                    "x": 0.12,
-                    "y": 0.04,
-                    "len": 0.78,
-                    "xanchor": "left",
-                    "yanchor": "bottom",
-                    "currentvalue": {
-                        "prefix": "배송 진행 시간: ",
-                        "suffix": "분",
-                        "font": {"size": 15}
-                    },
-                    "pad": {"t": 35, "b": 10},
-                    "steps": [
-                        {
-                            "label": str(t),
-                            "method": "animate",
-                            "args": [
-                                [str(t)],
-                                {
-                                    "frame": {
-                                        "duration": 0,
-                                        "redraw": True
-                                    },
-                                    "transition": {
-                                        "duration": 0
-                                    },
-                                    "mode": "immediate"
-                                }
-                            ]
-                        }
-                        for t in frame_times
-                    ]
-                }
+    # ── 지도 (전체 너비) ──────────────────────────────────────────
+    base_traces = make_map_traces_for_time(0)
+    fig = go.Figure(data=base_traces)
+    fig.frames = [
+        go.Frame(data=make_map_traces_for_time(t), name=str(t))
+        for t in frame_times
+    ]
+    frame_duration = int(800 / playback_speed)
+    fig.update_layout(
+        mapbox=dict(style="carto-positron",
+                    center=dict(lat=center_lat, lon=center_lon), zoom=11.0),
+        height=600,
+        margin=dict(l=0, r=0, t=0, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=0.01, xanchor="left", x=0.01,
+                    bgcolor="rgba(255,255,255,0.88)", bordercolor="#E5E7EB", borderwidth=1),
+        updatemenus=[{
+            "type": "buttons", "showactive": False,
+            "x": 0.02, "y": 0.09, "xanchor": "left", "yanchor": "bottom",
+            "bgcolor": "rgba(255,255,255,0.92)", "bordercolor": "#E5E7EB", "borderwidth": 1,
+            "buttons": [
+                {"label": "▶ 재생", "method": "animate",
+                 "args": [None, {"frame": {"duration": frame_duration, "redraw": True},
+                                 "fromcurrent": True, "transition": {"duration": 0}, "mode": "immediate"}]},
+                {"label": "⏸ 정지", "method": "animate",
+                 "args": [[None], {"frame": {"duration": 0, "redraw": False}, "mode": "immediate"}]}
             ]
-        )
+        }],
+        sliders=[{
+            "active": 0, "x": 0.12, "y": 0.04, "len": 0.78,
+            "xanchor": "left", "yanchor": "bottom",
+            "currentvalue": {"prefix": "배송 진행 시간: ", "suffix": "분", "font": {"size": 15}},
+            "pad": {"t": 35, "b": 10},
+            "steps": [{"label": str(t), "method": "animate",
+                        "args": [[str(t)], {"frame": {"duration": 0, "redraw": True},
+                                            "transition": {"duration": 0}, "mode": "immediate"}]}
+                       for t in frame_times]
+        }]
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-        st.plotly_chart(fig, width="stretch")
+    # ── 지도 아래: 배송 요약 카드 ────────────────────────────────
+    st.markdown("---")
+    st.markdown(
+        '<p style="font-size:1.05rem;font-weight:800;color:#374151;margin-bottom:12px;">전체 배송 스케줄 요약</p>',
+        unsafe_allow_html=True
+    )
 
-    with schedule_col:
-        st.markdown(
-            """
-            <div class="panel-card">
-                <div class="panel-title">전체 배송 스케줄 타임라인</div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-        if selected_route.empty:
-            st.write("선택한 조건에 해당하는 스케줄이 없습니다.")
-    
-        else:
-            timeline_df = selected_route.copy()
-    
-            timeline_df["수단"] = timeline_df["mode"].map({
-                "vehicle": "차량",
-                "drone": "드론"
-            }).fillna(timeline_df["mode"])
-    
-            timeline_df["병원"] = timeline_df["hospital"].apply(get_hosp_display_name)
-    
-            timeline_df = timeline_df.sort_values(
-                ["mode", "vehicle_no", "tour_no", "visit_order"]
-            ).copy()
+    if selected_route.empty:
+        st.info("선택한 조건에 해당하는 스케줄이 없습니다.")
+    else:
+        timeline_df = selected_route.copy()
+        timeline_df["수단"] = timeline_df["mode"].map({"vehicle": "차량", "drone": "드론"}).fillna(timeline_df["mode"])
+        timeline_df["병원명표시"] = timeline_df["hospital"].apply(get_hosp_display_name)
+        timeline_df["지연여부"] = "정상"
+        if "tardiness_min" in timeline_df.columns:
+            timeline_df.loc[timeline_df["tardiness_min"].fillna(0) > 0, "지연여부"] = "지연"
 
-            # ------------------------------------------------------------
-            # 각 방문 구간의 시작 시간 계산
-            # 첫 방문: depart_min 사용
-            # 이후 방문: 이전 병원 도착 시간 사용
-            # ------------------------------------------------------------
-            timeline_df["segment_start"] = np.nan
-    
-            for _, g in timeline_df.groupby(["mode", "vehicle_no", "tour_no"], sort=False):
-                idxs = list(g.index)
-    
-                for i, idx in enumerate(idxs):
-                    if i == 0:
-                        if "depart_min" in timeline_df.columns and pd.notna(timeline_df.loc[idx, "depart_min"]):
-                            timeline_df.loc[idx, "segment_start"] = float(timeline_df.loc[idx, "depart_min"])
-                        else:
-                            timeline_df.loc[idx, "segment_start"] = 0.0
-                    else:
-                        prev_idx = idxs[i - 1]
-                        timeline_df.loc[idx, "segment_start"] = float(timeline_df.loc[prev_idx, "arrival_min"])
-    
-            timeline_df["segment_end"] = timeline_df["arrival_min"].astype(float)
-            timeline_df["duration"] = timeline_df["segment_end"] - timeline_df["segment_start"]
-            timeline_df["duration"] = timeline_df["duration"].clip(lower=0.1)
-    
-            timeline_df["자원"] = (
-                timeline_df["수단"].astype(str)
-                + " "
-                + timeline_df["vehicle_no"].astype(str)
-                + " / 투어 "
-                + timeline_df["tour_no"].astype(str)
-            )
-    
-            timeline_df["지연여부"] = "정상"
-    
-            if "tardiness_min" in timeline_df.columns:
-                timeline_df.loc[timeline_df["tardiness_min"].fillna(0) > 0, "지연여부"] = "지연"
-    
-            timeline_df["hover"] = (
-                "수단: " + timeline_df["수단"].astype(str)
-                + "<br>번호: " + timeline_df["vehicle_no"].astype(str)
-                + "<br>투어: " + timeline_df["tour_no"].astype(str)
-                + "<br>순서: " + timeline_df["visit_order"].astype(str)
-                + "<br>병원: " + timeline_df["병원"].astype(str)
-                + "<br>이동 시작: " + timeline_df["segment_start"].round(1).astype(str) + "분"
-                + "<br>도착: " + timeline_df["segment_end"].round(1).astype(str) + "분"
-            )
-    
-            if "due_min" in timeline_df.columns:
-                timeline_df["hover"] += (
-                    "<br>납기: "
-                    + timeline_df["due_min"].round(1).astype(str)
-                    + "분"
+        # 차량/드론 수 파악해서 컬럼 수 결정
+        groups = list(timeline_df.groupby(["수단", "vehicle_no"], sort=True))
+        n_cols = min(len(groups), 3)
+        cols = st.columns(n_cols)
+
+        for col_idx, ((수단, vno), vdf) in enumerate(groups):
+            vdf = vdf.sort_values(["tour_no", "visit_order"])
+            총방문 = len(vdf)
+            지연수 = (vdf["지연여부"] == "지연").sum()
+            마지막도착 = vdf["arrival_min"].max()
+            투어수 = vdf["tour_no"].nunique()
+
+            # 투어별 방문 배지 HTML
+            tour_html = ""
+            for tour_no, tdf in vdf.groupby("tour_no", sort=True):
+                tdf = tdf.sort_values("visit_order")
+                badges = ""
+                for _, row in tdf.iterrows():
+                    is_late = row["지연여부"] == "지연"
+                    bg = "#DC2626" if is_late else "#7F1D1D"
+                    hosp_name = str(row["병원명표시"])
+                    # 이름이 길면 잘라서 표시
+                    short_name = hosp_name[:6] + "…" if len(hosp_name) > 7 else hosp_name
+                    arr = f"{float(row['arrival_min']):.0f}분"
+                    badges += (
+                        f'<span title="{hosp_name} ({arr})" style="'
+                        f'display:inline-block;background:{bg};color:#fff;'
+                        f'border-radius:6px;padding:3px 7px;margin:2px 2px;'
+                        f'font-size:0.72rem;font-weight:700;cursor:default;">'
+                        f'{short_name}<br><span style="font-weight:400;font-size:0.68rem;">{arr}</span>'
+                        f'</span>'
+                    )
+                tour_html += (
+                    f'<div style="margin-bottom:6px;">'
+                    f'<span style="font-size:0.75rem;color:#6B7280;font-weight:700;">투어 {tour_no}</span><br>'
+                    f'{badges}</div>'
                 )
-    
-            if "tardiness_min" in timeline_df.columns:
-                timeline_df["hover"] += (
-                    "<br>지연: "
-                    + timeline_df["tardiness_min"].fillna(0).round(1).astype(str)
-                    + "분"
-                )
-    
-            # ------------------------------------------------------------
-            # 타임라인 그래프
-            # ------------------------------------------------------------
-            fig_schedule = go.Figure()
-    
-            normal_df = timeline_df[timeline_df["지연여부"] == "정상"].copy()
-            late_df = timeline_df[timeline_df["지연여부"] == "지연"].copy()
-    
-            if not normal_df.empty:
-                fig_schedule.add_trace(go.Bar(
-                    x=normal_df["duration"],
-                    y=normal_df["자원"],
-                    base=normal_df["segment_start"],
-                    orientation="h",
-                    text=normal_df["병원"],
-                    textposition="inside",
-                    insidetextanchor="middle",
-                    hovertext=normal_df["hover"],
-                    hoverinfo="text",
-                    marker=dict(
-                        color="rgba(127,29,29,0.70)",
-                        line=dict(color="rgba(127,29,29,1.0)", width=1)
-                    ),
-                    name="정상"
-                ))
-    
-            if not late_df.empty:
-                fig_schedule.add_trace(go.Bar(
-                    x=late_df["duration"],
-                    y=late_df["자원"],
-                    base=late_df["segment_start"],
-                    orientation="h",
-                    text=late_df["병원"],
-                    textposition="inside",
-                    insidetextanchor="middle",
-                    hovertext=late_df["hover"],
-                    hoverinfo="text",
-                    marker=dict(
-                        color="rgba(220,38,38,0.85)",
-                        line=dict(color="rgba(127,29,29,1.0)", width=1)
-                    ),
-                    name="지연"
-                ))
-    
-            # 납기 시간 표시선
-            if "due_min" in timeline_df.columns:
-                due_df = timeline_df.dropna(subset=["due_min"]).copy()
-    
-                if not due_df.empty:
-                    fig_schedule.add_trace(go.Scatter(
-                        x=due_df["due_min"],
-                        y=due_df["자원"],
-                        mode="markers",
-                        marker=dict(
-                            symbol="line-ns-open",
-                            size=16,
-                            color="#111827",
-                            line=dict(width=2)
-                        ),
-                        text=(
-                            "납기: "
-                            + due_df["due_min"].round(1).astype(str)
-                            + "분<br>병원: "
-                            + due_df["병원"].astype(str)
-                        ),
-                        hoverinfo="text",
-                        name="납기"
-                    ))
-    
-            fig_schedule.update_layout(
-                height=430,
-                barmode="overlay",
-                xaxis=dict(
-                    title="배송 진행 시간(분)",
-                    range=[0, max(max_time, 1) + 20],
-                    gridcolor="#E5E7EB"
-                ),
-                yaxis=dict(
-                    title="",
-                    autorange="reversed"
-                ),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                ),
-                margin=dict(l=10, r=10, t=30, b=20),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)"
+
+            icon = "차량" if 수단 == "차량" else "드론"
+            late_badge = (
+                f'<span style="background:#FEE2E2;color:#DC2626;border-radius:5px;'
+                f'padding:2px 7px;font-size:0.75rem;font-weight:700;">지연 {지연수}건</span>'
+                if 지연수 > 0 else
+                '<span style="background:#D1FAE5;color:#065F46;border-radius:5px;'
+                'padding:2px 7px;font-size:0.75rem;font-weight:700;">모두 정상</span>'
             )
-    
-            st.plotly_chart(fig_schedule, width="stretch")
-    
-            # ------------------------------------------------------------
-            # 아래쪽: 차량/드론별 요약 카드
-            # ------------------------------------------------------------
-            summary_cards = (
-                timeline_df
-                .groupby(["수단", "vehicle_no"], as_index=False)
-                .agg(
-                    투어수=("tour_no", "nunique"),
-                    방문수=("hospital", "count"),
-                    마지막도착=("arrival_min", "max")
-                )
-                .sort_values(["수단", "vehicle_no"])
+
+            card = (
+                f'<div style="background:#fff;border:1px solid #E5E7EB;border-radius:14px;'
+                f'padding:14px 16px;height:100%;box-shadow:0 1px 4px rgba(0,0,0,0.06);">'
+                f'<div style="font-size:1rem;font-weight:800;color:#111827;margin-bottom:4px;">'
+                f'{icon} {수단} {vno}</div>'
+                f'<div style="font-size:0.8rem;color:#6B7280;margin-bottom:8px;">'
+                f'투어 {투어수}개 · 방문 {총방문}곳 '
+                f'&nbsp;&nbsp;{late_badge}</div>'
+                f'<div style="border-top:1px solid #F3F4F6;padding-top:8px;">'
+                f'{tour_html}</div>'
+                f'</div>'
             )
-    
-            card_html = """
-            <div style="
-                display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 10px;
-                margin-top: 8px;
-            ">
-            """
-    
-            for _, row in summary_cards.iterrows():
-                card_html += f"""
-                <div style="
-                    background: #F9FAFB;
-                    border: 1px solid #E5E7EB;
-                    border-radius: 12px;
-                    padding: 12px 14px;
-                ">
-                    <div style="
-                        font-weight: 800;
-                        color: #111827;
-                        font-size: 0.95rem;
-                        margin-bottom: 6px;
-                    ">
-                        {row['수단']} {row['vehicle_no']}
-                    </div>
-                    <div style="font-size: 0.85rem; color: #4B5563;">
-                        투어 {int(row['투어수'])}개 · 방문 {int(row['방문수'])}곳
-                    </div>
-                    <div style="font-size: 0.85rem; color: #991B1B; font-weight: 700;">
-                        마지막 도착 {float(row['마지막도착']):.1f}분
-                    </div>
-                </div>
-                """
-    
-            card_html += "</div>"
-    
-            st.markdown(card_html, unsafe_allow_html=True)
-    
-        st.markdown("</div>", unsafe_allow_html=True)
+
+            with cols[col_idx % n_cols]:
+                st.markdown(card, unsafe_allow_html=True)
 
 # ============================================================
 # Tab 2. 경로 상세
